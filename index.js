@@ -2,41 +2,71 @@ const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
-const axios = require('axios'); // Needed for API calls
+const axios = require('axios');
 require('dotenv').config();
 
-// User Model, Auth Routes, etc.
-// ... (All the previous login/register code remains here) ...
+const app = express();
+const port = process.env.PORT || 5000;
 
-// --- NEW STOCK SEARCH ROUTE ---
-app.get('/api/stocks/search', async (req, res) => {
-  const symbol = req.query.symbol;
-  if (!symbol) {
-    return res.status(400).json({ message: 'Symbol query is required' });
-  }
+// --- CONFIGURATION ---
+app.use(cors({ origin: 'https://apexstox.netlify.app', credentials: true }));
+app.use(express.json());
 
-  const options = {
-    method: 'GET',
-    url: 'https://twelve-data1.p.rapidapi.com/symbol_search',
-    params: {
-      symbol: symbol,
-      outputsize: '10',
-      country: 'India'
-    },
-    headers: {
-      'X-RapidAPI-Key': process.env.RAPIDAPI_KEY,
-      'X-RapidAPI-Host': 'twelve-data1.p.rapidapi.com'
-    }
-  };
-
-  try {
-    const response = await axios.request(options);
-    res.json(response.data);
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Failed to fetch stock data' });
-  }
+// --- DATABASE CONNECTION ---
+const uri = process.env.DATABASE_URL;
+mongoose.connect(uri);
+const connection = mongoose.connection;
+connection.once('open', () => {
+  console.log("MongoDB database connection established successfully");
 });
 
+// --- DATABASE SCHEMAS ---
+const userSchema = new mongoose.Schema({
+  email: { type: String, required: true, unique: true },
+  password: { type: String, required: true },
+  virtualBalance: { type: Number, default: 1000000 },
+  portfolio: [{
+    symbol: String,
+    quantity: Number,
+    avgPrice: Number,
+  }],
+});
+const User = mongoose.model('User', userSchema);
 
-// ... (rest of the server code remains here) ...
+// --- API ROUTES ---
+const authRouter = express.Router();
+const stockRouter = express.Router();
+const tradeRouter = express.Router(); // New router for trades
+
+// AUTHENTICATION ROUTES
+authRouter.route('/register').post(async (req, res) => { /* ... register logic ... */ });
+authRouter.route('/login').post(async (req, res) => { /* ... login logic ... */ });
+
+// STOCK DATA ROUTES
+stockRouter.route('/search').get(async (req, res) => { /* ... search logic ... */ });
+// We'll add routes for chart and news data here later
+
+// TRADE EXECUTION ROUTES (New)
+tradeRouter.route('/buy').post(async (req, res) => {
+  // Logic to process a buy order
+  // Deduct from virtualBalance, add to portfolio
+  res.json({ message: "Buy order processed successfully!" });
+});
+tradeRouter.route('/sell').post(async (req, res) => {
+  // Logic to process a sell order
+  // Add to virtualBalance, remove from portfolio, calculate P&L
+  res.json({ message: "Sell order processed successfully!" });
+});
+
+// Use Routers
+app.use('/api/auth', authRouter);
+app.use('/api/stocks', stockRouter);
+app.use('/api/trade', tradeRouter); // Use the new trade router
+
+app.get('/', (req, res) => {
+  res.send('Hello from ApexStox Backend!');
+});
+
+app.listen(port, () => {
+    console.log(`Server is running on port: ${port}`);
+});
