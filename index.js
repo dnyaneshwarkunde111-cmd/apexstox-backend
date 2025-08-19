@@ -8,25 +8,38 @@ require('dotenv').config();
 const app = express();
 const port = process.env.PORT || 5000;
 
+// --- CONFIGURATION ---
+// IMPORTANT: This URL must exactly match your Netlify frontend URL
 app.use(cors({ origin: "https://apexstox.netlify.app", credentials: true }));
 app.use(express.json());
 
+// --- DATABASE CONNECTION ---
 const uri = process.env.DATABASE_URL;
 mongoose.connect(uri);
 const connection = mongoose.connection;
-connection.once('open', () => { console.log("MongoDB database connection established successfully"); });
+connection.once('open', () => {
+  console.log("MongoDB database connection established successfully");
+});
 
+// --- DATABASE SCHEMA ---
 const userSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
   virtualBalance: { type: Number, default: 1000000 },
-  portfolio: [{ symbol: String, quantity: Number, avgPrice: Number }],
+  portfolio: [{
+    symbol: String,
+    quantity: Number,
+    avgPrice: Number,
+  }],
 });
 const User = mongoose.model('User', userSchema);
 
+// --- API ROUTES ---
 const authRouter = express.Router();
 const stockRouter = express.Router();
+const tradeRouter = express.Router();
 
+// AUTHENTICATION ROUTES
 authRouter.route('/register').post(async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -38,7 +51,9 @@ authRouter.route('/register').post(async (req, res) => {
     const newUser = new User({ email, password: hashedPassword });
     await newUser.save();
     res.json({ msg: "User registered successfully" });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 authRouter.route('/login').post(async (req, res) => {
@@ -49,13 +64,18 @@ authRouter.route('/login').post(async (req, res) => {
     if (!user) return res.status(400).json({ message: 'No account with this email has been registered' });
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(400).json({ message: 'Invalid credentials' });
+    // IMPORTANT: Send back the user ID so the frontend knows who is logged in
     res.json({ message: "Login successful", user: { id: user._id, email: user.email } });
-  } catch (err) { res.status(500).json({ error: err.message }); }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
+// STOCK DATA ROUTES
 stockRouter.route('/search').get(async (req, res) => {
   const symbol = req.query.symbol;
   if (!symbol) return res.status(400).json({ message: 'Symbol query is required' });
+  
   const options = {
     method: 'GET',
     url: 'https://twelve-data1.p.rapidapi.com/symbol_search',
@@ -65,14 +85,61 @@ stockRouter.route('/search').get(async (req, res) => {
       'X-RapidAPI-Host': 'twelve-data1.p.rapidapi.com'
     }
   };
+
   try {
     const response = await axios.request(options);
     res.json(response.data);
-  } catch (error) { res.status(500).json({ message: 'Failed to fetch stock data' }); }
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to fetch stock data' });
+  }
 });
 
+// TRADE EXECUTION ROUTES
+tradeRouter.route('/buy').post(async (req, res) => {
+  try {
+    const { userId, symbol, quantity, price } = req.body;
+    const totalCost = quantity * price;
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: "User not found." });
+
+    if (user.virtualBalance < totalCost) {
+      return res.status(400).json({ message: "Not enough funds." });
+    }
+
+    user.virtualBalance -= totalCost;
+    const stockIndex = user.portfolio.findIndex(s => s.symbol === symbol);
+
+    if (stockIndex > -1) {
+      const existingStock = user.portfolio[stockIndex];
+      const newQuantity = existingStock.quantity + quantity;
+      const newAvgPrice = ((existingStock.avgPrice * existingStock.quantity) + totalCost) / newQuantity;
+      user.portfolio[stockIndex].quantity = newQuantity;
+      user.portfolio[stockIndex].avgPrice = newAvgPrice;
+    } else {
+      user.portfolio.push({ symbol, quantity, avgPrice: price });
+    }
+
+    await user.save();
+    res.json({ message: "Stock purchased successfully!", user });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+tradeRouter.route('/sell').post(async (req, res) => {
+    res.json({ message: "Sell feature is in development." });
+});
+
+// Use Routers
 app.use('/api/auth', authRouter);
 app.use('/api/stocks', stockRouter);
+app.use('/api/trade', tradeRouter);
 
-app.get('/', (req, res) => { res.send('Hello from ApexStox Backend!'); });
-app.listen(port, () => { console.log(`Server is running on port: ${port}`); });
+app.get('/', (req, res) => {
+  res.send('Hello from ApexStox Backend!');
+});
+
+app.listen(port, () => {
+    console.log(`Server is running on port: ${port}`);
+});
