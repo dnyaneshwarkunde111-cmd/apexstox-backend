@@ -108,15 +108,11 @@ stockRouter.route('/price').get(async (req, res) => {
 
   try {
     const response = await axios.request(options);
-    // --- START OF THE FIX ---
-    // Hum check kar rahe hain ki price aa raha hai ya nahi
     if (response.data && response.data.price) {
         res.json({ price: response.data.price });
     } else {
-        // Agar price nahi milta, toh hum ek error bhejenge
         res.status(404).json({ message: 'Price data not available for this symbol.' });
     }
-    // --- END OF THE FIX ---
   } catch (error) {
     res.status(500).json({ message: 'Failed to fetch live price' });
   }
