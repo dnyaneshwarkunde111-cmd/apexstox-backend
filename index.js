@@ -92,6 +92,7 @@ stockRouter.route('/search').get(async (req, res) => {
   }
 });
 
+// --- START OF THE FIX: NEW ROUTE FOR LIVE PRICE ---
 stockRouter.route('/price').get(async (req, res) => {
   const symbol = req.query.symbol;
   if (!symbol) return res.status(400).json({ message: 'Symbol query is required' });
@@ -117,6 +118,7 @@ stockRouter.route('/price').get(async (req, res) => {
     res.status(500).json({ message: 'Failed to fetch live price' });
   }
 });
+// --- END OF THE FIX ---
 
 // TRADE EXECUTION ROUTES
 tradeRouter.route('/buy').post(async (req, res) => {
