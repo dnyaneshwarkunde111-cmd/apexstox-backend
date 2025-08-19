@@ -7,16 +7,14 @@ require('dotenv').config();
 
 const app = express();
 
-// --- START OF THE FIX ---
-// We are explicitly telling the server to trust your Netlify site
+// --- THE FINAL CORS FIX ---
+// This code now explicitly trusts your Netlify website URL.
 const corsOptions = {
-  origin: "https://apexstox.netlify.app", // Replace with your actual Netlify URL if different
+  origin: "https://apexstox.netlify.app",
   credentials: true,
 };
 app.use(cors(corsOptions));
-// --- END OF THE FIX ---
-
-// ... (rest of the code is the same as before) ...
+// --- END OF FIX ---
 
 const port = process.env.PORT || 5000;
 app.use(express.json());
@@ -36,15 +34,67 @@ const userSchema = new mongoose.Schema({
 });
 const User = mongoose.model('User', userSchema);
 
-// Auth Routes
+// --- START OF ROUTES ---
 const authRouter = express.Router();
-authRouter.route('/register').post(async (req, res) => { /* ... register logic ... */ });
-authRouter.route('/login').post(async (req, res) => { /* ... login logic ... */ });
-app.use('/api/auth', authRouter);
-
-// Stock Routes
 const stockRouter = express.Router();
-stockRouter.route('/search').get(async (req, res) => { /* ... search logic ... */ });
+
+// REGISTER A NEW USER
+authRouter.route('/register').post(async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) return res.status(400).json({ message: 'Please enter all fields' });
+    const existingUser = await User.findOne({ email: email });
+    if (existingUser) return res.status(400).json({ message: 'User with this email already exists' });
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+    const newUser = new User({ email, password: hashedPassword });
+    const savedUser = await newUser.save();
+    res.json(savedUser);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// LOGIN A USER
+authRouter.route('/login').post(async (req, res) => {
+   try {
+    const { email, password } = req.body;
+    if (!email || !password) return res.status(400).json({ message: 'Please enter all fields' });
+    const user = await User.findOne({ email: email });
+    if (!user) return res.status(400).json({ message: 'No account with this email has been registered' });
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) return res.status(400).json({ message: 'Invalid credentials' });
+    res.json({ message: "Login successful", user: { id: user._id, email: user.email } });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// STOCK SEARCH ROUTE
+stockRouter.route('/search').get(async (req, res) => {
+  const symbol = req.query.symbol;
+  if (!symbol) return res.status(400).json({ message: 'Symbol query is required' });
+  
+  const options = {
+    method: 'GET',
+    url: 'https://twelve-data1.p.rapidapi.com/symbol_search',
+    params: { symbol: symbol, outputsize: '10', country: 'India' },
+    headers: {
+      'X-RapidAPI-Key': process.env.RAPIDAPI_KEY,
+      'X-RapidAPI-Host': 'twelve-data1.p.rapidapi.com'
+    }
+  };
+
+  try {
+    const response = await axios.request(options);
+    res.json(response.data);
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to fetch stock data' });
+  }
+});
+// --- END OF ROUTES ---
+
+app.use('/api/auth', authRouter);
 app.use('/api/stocks', stockRouter);
 
 app.get('/', (req, res) => {
