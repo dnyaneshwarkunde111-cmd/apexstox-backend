@@ -9,7 +9,7 @@ const app = express();
 const port = process.env.PORT || 5000;
 
 // --- CONFIGURATION ---
-// IMPORTANT: This URL must exactly match your Netlify frontend URL
+// Yeh line bahut zaroori hai aur ismein aapka Netlify URL aana chahiye
 app.use(cors({ origin: "https://apexstox.netlify.app", credentials: true }));
 app.use(express.json());
 
@@ -64,7 +64,6 @@ authRouter.route('/login').post(async (req, res) => {
     if (!user) return res.status(400).json({ message: 'No account with this email has been registered' });
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) return res.status(400).json({ message: 'Invalid credentials' });
-    // IMPORTANT: Send back the user ID so the frontend knows who is logged in
     res.json({ message: "Login successful", user: { id: user._id, email: user.email } });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -91,6 +90,28 @@ stockRouter.route('/search').get(async (req, res) => {
     res.json(response.data);
   } catch (error) {
     res.status(500).json({ message: 'Failed to fetch stock data' });
+  }
+});
+
+stockRouter.route('/price').get(async (req, res) => {
+  const symbol = req.query.symbol;
+  if (!symbol) return res.status(400).json({ message: 'Symbol query is required' });
+
+  const options = {
+    method: 'GET',
+    url: 'https://twelve-data1.p.rapidapi.com/price',
+    params: { symbol: symbol, format: 'json' },
+    headers: {
+      'X-RapidAPI-Key': process.env.RAPIDAPI_KEY,
+      'X-RapidAPI-Host': 'twelve-data1.p.rapidapi.com'
+    }
+  };
+
+  try {
+    const response = await axios.request(options);
+    res.json({ price: response.data.price });
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to fetch live price' });
   }
 });
 
