@@ -1,3 +1,8 @@
+/*
+============================================================
+File: index.js (with Chart Data Route)
+============================================================
+*/
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
@@ -69,6 +74,7 @@ authRouter.route('/login').post(async (req, res) => {
   }
 });
 
+
 // STOCK DATA ROUTES
 stockRouter.route('/search').get(async (req, res) => {
   const symbol = req.query.symbol;
@@ -92,7 +98,6 @@ stockRouter.route('/search').get(async (req, res) => {
   }
 });
 
-// --- START OF THE FIX: NEW ROUTE FOR LIVE PRICE ---
 stockRouter.route('/price').get(async (req, res) => {
   const symbol = req.query.symbol;
   if (!symbol) return res.status(400).json({ message: 'Symbol query is required' });
@@ -118,7 +123,45 @@ stockRouter.route('/price').get(async (req, res) => {
     res.status(500).json({ message: 'Failed to fetch live price' });
   }
 });
-// --- END OF THE FIX ---
+
+// --- START OF NEW CODE: ROUTE FOR HISTORICAL CHART DATA ---
+stockRouter.route('/historical_data').get(async (req, res) => {
+  const { symbol, interval = '1day', outputsize = 365 } = req.query;
+  if (!symbol) return res.status(400).json({ message: 'Symbol query is required' });
+
+  const options = {
+    method: 'GET',
+    url: 'https://twelve-data1.p.rapidapi.com/time_series',
+    params: {
+      symbol: symbol,
+      interval: interval,
+      outputsize: outputsize,
+      format: 'json'
+    },
+    headers: {
+      'X-RapidAPI-Key': process.env.RAPIDAPI_KEY,
+      'X-RapidAPI-Host': 'twelve-data1.p.rapidapi.com'
+    }
+  };
+
+  try {
+    const response = await axios.request(options);
+    // Format the data for TradingView Lightweight Charts library
+    const formattedData = response.data.values.map(d => ({
+      time: d.datetime,
+      open: parseFloat(d.open),
+      high: parseFloat(d.high),
+      low: parseFloat(d.low),
+      close: parseFloat(d.close),
+    })).reverse(); // API returns newest first, chart needs oldest first
+    
+    res.json(formattedData);
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to fetch historical data' });
+  }
+});
+// --- END OF NEW CODE ---
+
 
 // TRADE EXECUTION ROUTES
 tradeRouter.route('/buy').post(async (req, res) => {
@@ -169,3 +212,4 @@ app.get('/', (req, res) => {
 app.listen(port, () => {
     console.log(`Server is running on port: ${port}`);
 });
+
