@@ -1,8 +1,3 @@
-/*
-============================================================
-File: index.js (with Chart Data Route)
-============================================================
-*/
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
@@ -14,6 +9,7 @@ const app = express();
 const port = process.env.PORT || 5000;
 
 // --- CONFIGURATION ---
+// IMPORTANT: Yeh URL aapke Netlify site se match karna chahiye
 app.use(cors({ origin: "https://apexstox.netlify.app", credentials: true }));
 app.use(express.json());
 
@@ -74,7 +70,6 @@ authRouter.route('/login').post(async (req, res) => {
   }
 });
 
-
 // STOCK DATA ROUTES
 stockRouter.route('/search').get(async (req, res) => {
   const symbol = req.query.symbol;
@@ -124,7 +119,6 @@ stockRouter.route('/price').get(async (req, res) => {
   }
 });
 
-// --- START OF NEW CODE: ROUTE FOR HISTORICAL CHART DATA ---
 stockRouter.route('/historical_data').get(async (req, res) => {
   const { symbol, interval = '1day', outputsize = 365 } = req.query;
   if (!symbol) return res.status(400).json({ message: 'Symbol query is required' });
@@ -146,22 +140,19 @@ stockRouter.route('/historical_data').get(async (req, res) => {
 
   try {
     const response = await axios.request(options);
-    // Format the data for TradingView Lightweight Charts library
     const formattedData = response.data.values.map(d => ({
       time: d.datetime,
       open: parseFloat(d.open),
       high: parseFloat(d.high),
       low: parseFloat(d.low),
       close: parseFloat(d.close),
-    })).reverse(); // API returns newest first, chart needs oldest first
+    })).reverse();
     
     res.json(formattedData);
   } catch (error) {
     res.status(500).json({ message: 'Failed to fetch historical data' });
   }
 });
-// --- END OF NEW CODE ---
-
 
 // TRADE EXECUTION ROUTES
 tradeRouter.route('/buy').post(async (req, res) => {
@@ -212,4 +203,3 @@ app.get('/', (req, res) => {
 app.listen(port, () => {
     console.log(`Server is running on port: ${port}`);
 });
-
